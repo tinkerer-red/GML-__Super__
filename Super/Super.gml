@@ -37,18 +37,31 @@ function __super() constructor {
 	
 	#region Find the original parent struct
 		
-		//it may already be the owner struct, but it could be a function inside the struct's function
-		
 		//if it's a function
-		static _anon_func_str_header = "gml_Script_anon_" //example : "gml_Script_anon_GUICompController_gml_GlobalScript_GUICompController_1618_GUICompController_gml_GlobalScript_GUICompController"
+		static _anon_func_str_header = "gml_Script_anon" //example : "gml_Script_anon_GUICompController_gml_GlobalScript_GUICompController_1618_GUICompController_gml_GlobalScript_GUICompController"
 		var _pos = string_pos(_anon_func_str_header, _str)
 		
 		//anon function declaired inside a constructor
 		if (_pos == 1) {
-		  static _anon_func_str_tail = "_gml_GlobalScript_";
-		  static _anon_func_header_end = string_length(_anon_func_str_header)+1;
+			static _anon_func_str_tail = "_gml_GlobalScript_";
+		  static _anon_func_header_end = string_length(_anon_func_str_header)+2;
 		  var _tail_pos = string_pos(_anon_func_str_tail, _str);
-		  _str = string_copy(_str, _anon_func_header_end, _tail_pos-_anon_func_header_end);
+			if (_tail_pos != 0) {
+				_str = string_copy(_str, _anon_func_header_end, _tail_pos-_anon_func_header_end);
+			}
+			else {
+				//example : "gml_Script_anon123_anon456_anon789_GUICompController"
+				//this was recently added in GM monthly release 2023.11
+				static _anon_seporator = "_anon"
+				static _anon_seporator_end = string_length("_anon")+1;
+				var _pos = string_pos(_anon_seporator, _str)
+				while (_pos) {
+					_str = string_delete(_str, 1, _pos+_anon_seporator_end+1);
+					
+					_pos = string_pos(_anon_seporator, _str)
+				}
+				_str = string_delete(_str, 1, 1);
+			}
 		}
 		else {
 			
