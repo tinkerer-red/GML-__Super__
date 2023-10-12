@@ -11,83 +11,89 @@
 
 // Last we leave it with this line so it makes it easier to read in the sense of doing `__SUPER__.get_value()`
 //		__super__
-
-#macro __SUPER__ static __super__ = new __super(); global.__super_self__ = self; __super__
-function __super() constructor {
-	static is_browser = (os_browser != browser_not_a_browser);
-	#region grab the callstack
-		if (!is_browser) {
-			var _callback = debug_get_callstack(2)[1];
-		}
-		else {
-			//on html5 the callstack includes "__yy_gml_object_create"
-			var _callback = debug_get_callstack(3)[2];
-		}
-		
-		var _pos = string_pos(":", _callback);
-		if (_pos != 0) {
-			var _str = string_copy(_callback, 1, _pos-1);
-		}
-		else {
-			//support for when the compiled code doesnt return the line number ":40" on the suffix
-			var _str = _callback;
-		}
-		
-	#endregion
+#macro __SUPER__ static __super__ = new __super(_GMFUNCTION_); global.__super_self__ = self; __super__
+function __super(_func_name) constructor {
+	//if we're calling from the base constructor, we already know it's name
 	
-	#region Find the original parent struct
-		
-		//if it's a function
-		static _anon_func_str_header = "gml_Script_anon" //example : "gml_Script_anon_GUICompController_gml_GlobalScript_GUICompController_1618_GUICompController_gml_GlobalScript_GUICompController"
-		var _pos = string_pos(_anon_func_str_header, _str)
-		
-		//anon function declaired inside a constructor
-		if (_pos == 1) {
-			static _anon_func_str_tail = "_gml_GlobalScript_";
-		  static _anon_func_header_end = string_length(_anon_func_str_header)+2;
-		  var _tail_pos = string_pos(_anon_func_str_tail, _str);
-			if (_tail_pos != 0) {
-				_str = string_copy(_str, _anon_func_header_end, _tail_pos-_anon_func_header_end);
-			}
-			else {
-				//example : "gml_Script_anon123_anon456_anon789_GUICompController"
-				//this was recently added in GM monthly release 2023.11
-				static _anon_seporator = "_anon"
-				static _anon_seporator_end = string_length("_anon")+1;
-				var _pos = string_pos(_anon_seporator, _str)
-				while (_pos) {
-					_str = string_delete(_str, 1, _pos+_anon_seporator_end+1);
-					
-					_pos = string_pos(_anon_seporator, _str)
-				}
-				_str = string_delete(_str, 1, 1);
-			}
+	
+	//used to break out once we have found a reliable answer
+	repeat(1) {
+		//this is only ever true when a constructor it's self is calling super
+		if (asset_get_index(_func_name) != -1) {
+			var _str = _func_name;
+			log(["case 1 _str", _str])
+			break;
 		}
-		else {
-			
-			static _func_str_spacer = "_gml_GlobalScript_" //example : "gml_Script_set_sprite_GUICompColorWheel_gml_GlobalScript_GUICompColorWheel"
-			var _pos = string_pos(_func_str_spacer, _str)
-			if (_pos != 0) {
-				static _func_str_spacer_end = string_length(_func_str_spacer);
-				var _tail_pos = string_pos(_func_str_spacer, _str);
-				var _str = string_copy(_str, _tail_pos+_func_str_spacer_end, string_length(_str)-(_tail_pos+_func_str_spacer_end)+1);
-			}
-			else {
-				//calling from constructor it's self
-				static _constructor_func_str_header = "gml_Script_" //example : "gml_Script_ControlPanelFolder"
-				_pos = string_pos(_constructor_func_str_header, _str)
-				if (_pos == 1) {
-					static _constructor_header_end = string_length(_constructor_func_str_header);
-					_str = string_delete(_str, 1, _constructor_header_end);
+		
+		//from here unfoertunately we have to guess a lot of it, though we can make some educated guesses
+		
+		//secondly if the naming convention sticks to the standards of camel case, we can find the last "_" check if the next charactor is upper case, and if so we will be pretty sure it's the full name of the constructor
+		var _pos = string_last_pos("_", _func_name);
+		//make sure the constructor doesnt end with a "_"
+		if (_pos != string_length(_func_name))
+		&& (_pos) {
+			var _char = string_copy(_func_name, _pos+1, 1)
+			if (_char == string_upper(_char)){
+				var _str = string_copy(_func_name, _pos+1, string_length(_func_name)-_pos);
+				if (asset_get_index(_str) != -1) {
+					log(["case 2 _str", _str])
+					break
 				}
 			}
-			
 		}
-		//there are probably a lot more i could add but they are either really bad practice or not currently possible
 		
-		var _parent_struct_name = _str;
+		//if there is only a single "_" we know the structure is `<function name>_<Constructo name>` like bar_Foo which would be Foo.bar()
+		//given that this happens fairly rarely, we've deprioritized this check
+		var _count = string_count("_", _func_name);
+		if (_count == 1) {
+			var _arr = string_split(_func_name, "_", false);
+			var _str = _arr[1];
+			if (asset_get_index(_str) != -1) {
+				log(["case 1 _str", _str])
+				break
+			}
+		}
 		
-	#endregion
+		
+		
+		//cooincidently, if the constructor does end with a "_" likely because it's private, then we are in luck because we can simply find how many it has, then find the seppoerator for it. bar___Foo__ has 2 "_" on the end so we know somewhere in the string we will find 3 "_" in a row.
+		var _pos = string_last_pos("_", _func_name);
+		if (_pos = string_length(_func_name)) {
+			var _current_index = _pos;
+			while (string_char_at(_func_name, _current_index) == "_") {
+				_current_index -= 1;
+			}
+			_current_index += 1;
+			var _string_to_search = "_"+string_copy(_func_name, _current_index, string_length(_func_name)-_current_index+1);
+			var _pos = string_pos(_string_to_search, _func_name)
+			if (_pos) {
+				var _str = string_copy(_func_name, _pos+1, string_length(_func_name)-_pos);
+				if (asset_get_index(_str) != -1) {
+					log(["case 4 _str", _str])
+					break
+				}
+			}
+		}
+		
+		//any other structure is very problematic, so as a last ditch effort, since we know the information provided will have the constructor at the very end, we loop backwards until we find a function of the same name. This is not ideal as a constructor of "A_B_C" will return the constructor "C"
+		var _i=string_length(_func_name)-1;
+		repeat(string_length(_func_name)-1) {
+			var _str = string_copy(_func_name, _i, string_length(_func_name)-_i+1)
+			if (asset_get_index(_str) != -1) {
+				log(["case 5 _str", _str]);
+				break
+			}
+		_i-=1}//end repeat loop
+		
+		if (asset_get_index(_str) != -1) {
+			break
+		}
+		
+		//else we should just drop an error message
+		show_error($"Super string manipulation is unable to reliably find the constructor from the supplied function {_func_name} please consider using camel case for your constructor names", true);
+	}
+	
+	var _parent_struct_name = _str;
 	
 	var _parent_methodID = asset_get_index(_parent_struct_name);
 	var _statics = static_get(_parent_methodID);
@@ -103,8 +109,8 @@ function __super() constructor {
 	
 	#region Find all parent structs
 		
-		/////while (_parent_struct_name != "Object") {
-		while (__object_statics__ != _parent_statics) {
+		while (_parent_struct_name != "Object") {
+		//while (__object_statics__ != _parent_statics) {
 			
 			var _key, _val;
 			var _names = variable_struct_get_names(_parent_statics);
@@ -129,8 +135,8 @@ function __super() constructor {
 			
 			
 			//continue to the next struct
-			//var _parent_struct_name = instanceof(_parent_statics)
-			_parent_statics = static_get(_parent_statics);
+			var _parent_struct_name = instanceof(_parent_statics)
+			//_parent_statics = static_get(_parent_statics);
 		}
 		
 	#endregion
